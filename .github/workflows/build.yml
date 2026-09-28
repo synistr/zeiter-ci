@@ -1,0 +1,49 @@
+name: Build
+run-name: ${{ inputs.sha }}
+
+# Builds the private repo synistr/zeiter here, because GitHub's macOS runners are free for public
+# repos. This repo holds only workflows: they check out the given commit with a read-only deploy
+# key (secret SOURCE_DEPLOY_KEY) and run the build steps from it (.github/actions/ios-build),
+# which keep everything visible here free of source. Florian's VPS dispatches the builds and
+# decrypts and publishes the IPA (~/chattr-ota/apps.py; template:
+# ~/chattr-ota/templates/private/build.yml).
+
+on:
+  workflow_dispatch:
+    inputs:
+      sha:
+        description: Commit to build
+        required: true
+
+concurrency:
+  group: build
+  cancel-in-progress: true
+
+permissions: {}
+
+jobs:
+  build:
+    # Override without a code change: gh variable set MACOS_RUNNER --body <label>
+    runs-on: ${{ vars.MACOS_RUNNER || 'macos-26' }}
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          repository: synistr/zeiter
+          ref: ${{ inputs.sha }}
+          ssh-key: ${{ secrets.SOURCE_DEPLOY_KEY }}
+          persist-credentials: false
+
+      # BUILD_NUMBER_OFFSET continues the numbering of builds made elsewhere before.
+      - name: Build number
+        env:
+          OFFSET: ${{ vars.BUILD_NUMBER_OFFSET }}
+        run: echo "BUILD_NUMBER=$((GITHUB_RUN_NUMBER + ${OFFSET:-0}))" >> "$GITHUB_ENV"
+
+      - uses: ./.github/actions/ios-build
+        with:
+          build-number: ${{ env.BUILD_NUMBER }}
+          p12-base64: ${{ secrets.IOS_DIST_P12_BASE64 }}
+          p12-password: ${{ secrets.IOS_DIST_P12_PASSWORD }}
+          profiles-base64: ${{ secrets.IOS_ADHOC_PROFILES_BASE64 }}
+          artifact-key: ${{ secrets.ARTIFACT_KEY }}

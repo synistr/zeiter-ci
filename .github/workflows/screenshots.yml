@@ -1,0 +1,36 @@
+name: Screenshots
+run-name: ${{ inputs.sha }}
+
+# Runs the private repo's own screenshot steps (.github/actions/screenshots, if it has them) for a
+# commit, e.g. in the iOS simulator. They upload the screenshots encrypted as the `screenshots`
+# artifact; `~/chattr-ota/build.py <slug> --screenshots` dispatches this and decrypts them.
+# Template: ~/chattr-ota/templates/private/screenshots.yml.
+
+on:
+  workflow_dispatch:
+    inputs:
+      sha:
+        description: Commit to screenshot
+        required: true
+
+concurrency:
+  group: screenshots
+  cancel-in-progress: true
+
+permissions: {}
+
+jobs:
+  screenshots:
+    runs-on: ${{ vars.MACOS_RUNNER || 'macos-26' }}
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          repository: synistr/zeiter
+          ref: ${{ inputs.sha }}
+          ssh-key: ${{ secrets.SOURCE_DEPLOY_KEY }}
+          persist-credentials: false
+
+      - uses: ./.github/actions/screenshots
+        with:
+          artifact-key: ${{ secrets.ARTIFACT_KEY }}
