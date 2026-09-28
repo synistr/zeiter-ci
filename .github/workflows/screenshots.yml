@@ -24,12 +24,23 @@ jobs:
     runs-on: ${{ vars.MACOS_RUNNER || 'macos-26' }}
     timeout-minutes: 60
     steps:
-      - uses: actions/checkout@v7
-        with:
-          repository: synistr/zeiter
-          ref: ${{ inputs.sha }}
-          ssh-key: ${{ secrets.SOURCE_DEPLOY_KEY }}
-          persist-credentials: false
+      # Not actions/checkout: it logs "HEAD is now at <sha> <commit subject>", and this log is public.
+      - name: Check out the source
+        env:
+          DEPLOY_KEY: ${{ secrets.SOURCE_DEPLOY_KEY }}
+          SHA: ${{ inputs.sha }}
+        run: |
+          key="$RUNNER_TEMP/deploy-key"
+          (umask 077 && printf '%s\n' "$DEPLOY_KEY" > "$key")
+          # GitHub's host key (gh api meta), pinned.
+          echo "github.com ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIOMqqnkVzrm0SdG6UOoqKLsabgH5C9okWi0dh2l9GKJl" \
+            > "$RUNNER_TEMP/known_hosts"
+          export GIT_SSH_COMMAND="ssh -i $key -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile=$RUNNER_TEMP/known_hosts"
+          git init -q .
+          git remote add origin git@github.com:synistr/zeiter.git
+          git fetch -q --depth 1 origin "$SHA"
+          git checkout -q FETCH_HEAD
+          rm "$key"
 
       - uses: ./.github/actions/screenshots
         with:

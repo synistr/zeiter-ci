@@ -2,8 +2,8 @@ name: Build
 run-name: ${{ inputs.sha }}
 
 # Builds the private repo synistr/zeiter here, because GitHub's macOS runners are free for public
-# repos. This repo holds only workflows: they check out the given commit with a read-only deploy
-# key (secret SOURCE_DEPLOY_KEY) and run the build steps from it (.github/actions/ios-build),
+# repos. This repo holds only workflows: they fetch the given commit with a read-only deploy key
+# (secret SOURCE_DEPLOY_KEY) and run the build steps from it (.github/actions/ios-build),
 # which keep everything visible here free of source. Florian's VPS dispatches the builds and
 # decrypts and publishes the IPA (~/chattr-ota/apps.py; template:
 # ~/chattr-ota/templates/private/build.yml).
@@ -27,12 +27,23 @@ jobs:
     runs-on: ${{ vars.MACOS_RUNNER || 'macos-26' }}
     timeout-minutes: 45
     steps:
-      - uses: actions/checkout@v7
-        with:
-          repository: synistr/zeiter
-          ref: ${{ inputs.sha }}
-          ssh-key: ${{ secrets.SOURCE_DEPLOY_KEY }}
-          persist-credentials: false
+      # Not actions/checkout: it logs "HEAD is now at <sha> <commit subject>", and this log is public.
+      - name: Check out the source
+        env:
+          DEPLOY_KEY: ${{ secrets.SOURCE_DEPLOY_KEY }}
+          SHA: ${{ inputs.sha }}
+        run: |
+          key="$RUNNER_TEMP/deploy-key"
+          (umask 077 && printf '%s\n' "$DEPLOY_KEY" > "$key")
+          # GitHub's host key (gh api meta), pinned.
+          echo "github.com ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIOMqqnkVzrm0SdG6UOoqKLsabgH5C9okWi0dh2l9GKJl" \
+            > "$RUNNER_TEMP/known_hosts"
+          export GIT_SSH_COMMAND="ssh -i $key -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile=$RUNNER_TEMP/known_hosts"
+          git init -q .
+          git remote add origin git@github.com:synistr/zeiter.git
+          git fetch -q --depth 1 origin "$SHA"
+          git checkout -q FETCH_HEAD
+          rm "$key"
 
       # BUILD_NUMBER_OFFSET continues the numbering of builds made elsewhere before.
       - name: Build number
