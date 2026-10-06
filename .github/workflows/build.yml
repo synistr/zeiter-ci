@@ -1,13 +1,6 @@
 name: Build
 run-name: ${{ inputs.sha }}
 
-# Builds the private repo synistr/zeiter here, because GitHub's macOS runners are free for public
-# repos. This repo holds only workflows: they fetch the given commit with a read-only deploy key
-# (secret SOURCE_DEPLOY_KEY) and run the build steps from it (.github/actions/ios-build),
-# which keep everything visible here free of source. Florian's VPS dispatches the builds and
-# decrypts and publishes the IPA (~/chattr-ota/apps.py; template:
-# ~/chattr-ota/templates/private/build.yml).
-
 on:
   workflow_dispatch:
     inputs:
